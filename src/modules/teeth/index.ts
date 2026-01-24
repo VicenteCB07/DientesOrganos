@@ -1,0 +1,6 @@
+export { ToothChart } from './components/ToothChart'
+export { Tooth } from './components/Tooth'
+export { ToothDetail } from './components/ToothDetail'
+export { TeethChartPage } from './pages/TeethChartPage'
+export { TEETH_DATA, ELEMENTOS_INFO, CUADRANTES_INFO, getToothByNumber, getTeethByQuadrant, getTeethByElement } from './data/teethData'
+export type { ToothData, ToothPosition, ElementoInfo } from './types'

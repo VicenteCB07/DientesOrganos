@@ -1,0 +1,6 @@
+export { AnamnesisWizard } from './AnamnesisWizard'
+export { DatosPersonalesForm } from './DatosPersonalesForm'
+export { AntecedentesMedicosForm } from './AntecedentesMedicosForm'
+export { AntecedentesOdontologicosForm } from './AntecedentesOdontologicosForm'
+export { HabitosEstiloVidaForm } from './HabitosEstiloVidaForm'
+export { EstadoEmocionalFamiliarForm } from './EstadoEmocionalFamiliarForm'

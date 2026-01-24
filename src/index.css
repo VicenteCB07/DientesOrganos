@@ -1,0 +1,289 @@
+@import "tailwindcss";
+
+@theme {
+  /* ========================================
+     Tipografía - Poppins
+     ======================================== */
+  --font-family-sans: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* ========================================
+     Paleta de colores basada en educovirtual.com
+     Amarillo dorado como color primario
+     ======================================== */
+
+  /* Colores de fondo */
+  --color-background: hsl(210 20% 98%); /* #F9FAFB */
+  --color-foreground: hsl(221 39% 11%); /* #111827 */
+
+  /* Tarjetas y popovers */
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(221 39% 11%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(221 39% 11%);
+
+  /* Color primario - Amarillo Dorado */
+  --color-primary: hsl(45 82% 55%); /* #E8C12F */
+  --color-primary-foreground: hsl(221 39% 11%); /* Texto oscuro sobre amarillo */
+
+  /* Color secundario */
+  --color-secondary: hsl(210 20% 98%); /* #F9FAFB */
+  --color-secondary-foreground: hsl(221 39% 11%);
+
+  /* Colores muted (apagados) */
+  --color-muted: hsl(220 14% 96%);
+  --color-muted-foreground: hsl(215 16% 47%); /* #4B5563 */
+
+  /* Colores de acento - Dorado más oscuro */
+  --color-accent: hsl(43 75% 44%); /* #C09C1E */
+  --color-accent-foreground: hsl(0 0% 100%);
+
+  /* Colores destructivos (errores) */
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+
+  /* Bordes e inputs */
+  --color-border: hsl(220 13% 91%); /* #E5E7EB */
+  --color-input: hsl(220 13% 91%);
+  --color-ring: hsl(45 82% 55%); /* Mismo que primary */
+
+  /* Border radius - Más redondeado como educovirtual */
+  --radius-lg: 1.125rem; /* 18px */
+  --radius-md: 0.75rem; /* 12px */
+  --radius-sm: 0.5rem; /* 8px */
+}
+
+/* ========================================
+   Dark Mode - Variables personalizadas
+   ======================================== */
+.dark {
+  --color-background: hsl(222 47% 11%); /* #0f172a */
+  --color-foreground: hsl(210 40% 98%); /* #f8fafc */
+
+  --color-card: hsl(222 47% 15%); /* #1e293b */
+  --color-card-foreground: hsl(210 40% 98%);
+  --color-popover: hsl(222 47% 15%);
+  --color-popover-foreground: hsl(210 40% 98%);
+
+  --color-primary: hsl(45 82% 55%); /* Mantener amarillo dorado */
+  --color-primary-foreground: hsl(221 39% 11%);
+
+  --color-secondary: hsl(217 33% 17%); /* #1e293b */
+  --color-secondary-foreground: hsl(210 40% 98%);
+
+  --color-muted: hsl(217 33% 17%);
+  --color-muted-foreground: hsl(215 20% 65%);
+
+  --color-accent: hsl(43 75% 50%);
+  --color-accent-foreground: hsl(221 39% 11%);
+
+  --color-destructive: hsl(0 62% 50%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+
+  --color-border: hsl(217 33% 25%);
+  --color-input: hsl(217 33% 25%);
+  --color-ring: hsl(45 82% 55%);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+/* Aplicar Poppins a todo el documento */
+html {
+  font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Asegurar que todos los elementos hereden la tipografía */
+*, *::before, *::after {
+  font-family: inherit;
+}
+
+/* Estilos adicionales para mejorar la tipografía */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* Inputs, botones y otros elementos de formulario */
+button, input, select, textarea, optgroup {
+  font-family: "Poppins", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Sombras suaves como educovirtual */
+.shadow-soft {
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.13);
+}
+
+.dark .shadow-soft {
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.3);
+}
+
+/* Transiciones suaves */
+button, a, input, select, textarea {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Focus rings con el color primario */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-muted-foreground);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-foreground);
+}
+
+/* ========================================
+   Dark Mode - Ajustes específicos
+   ======================================== */
+
+/* Gradientes de fondo */
+.dark .bg-gradient-to-br.from-slate-50.to-blue-50 {
+  background-image: linear-gradient(to bottom right, hsl(222 47% 11%), hsl(217 33% 17%));
+}
+
+/* Bordes en dark mode */
+.dark .border-gray-200 {
+  border-color: hsl(217 33% 25%);
+}
+
+.dark .border-gray-300 {
+  border-color: hsl(217 33% 30%);
+}
+
+/* Fondos específicos */
+.dark .bg-white {
+  background-color: hsl(222 47% 15%);
+}
+
+.dark .bg-gray-50 {
+  background-color: hsl(222 47% 13%);
+}
+
+.dark .bg-gray-100 {
+  background-color: hsl(217 33% 17%);
+}
+
+/* Textos en dark mode */
+.dark .text-gray-900 {
+  color: hsl(210 40% 98%);
+}
+
+.dark .text-gray-800 {
+  color: hsl(210 40% 96%);
+}
+
+.dark .text-gray-700 {
+  color: hsl(210 40% 90%);
+}
+
+.dark .text-gray-600 {
+  color: hsl(215 20% 75%);
+}
+
+.dark .text-gray-500 {
+  color: hsl(215 20% 65%);
+}
+
+.dark .text-gray-400 {
+  color: hsl(215 20% 55%);
+}
+
+/* Hover states en dark mode */
+.dark .hover\:bg-gray-100:hover {
+  background-color: hsl(217 33% 20%);
+}
+
+.dark .hover\:text-gray-900:hover {
+  color: hsl(210 40% 98%);
+}
+
+/* Badges y alertas */
+.dark .bg-red-50 {
+  background-color: hsl(0 50% 15%);
+}
+
+.dark .bg-amber-50 {
+  background-color: hsl(45 50% 15%);
+}
+
+.dark .bg-green-50 {
+  background-color: hsl(142 50% 15%);
+}
+
+.dark .bg-blue-50 {
+  background-color: hsl(217 50% 15%);
+}
+
+.dark .border-red-200 {
+  border-color: hsl(0 50% 30%);
+}
+
+.dark .border-amber-200 {
+  border-color: hsl(45 50% 30%);
+}
+
+/* Inputs y selects */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: hsl(222 47% 13%);
+  border-color: hsl(217 33% 25%);
+  color: hsl(210 40% 98%);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: hsl(215 20% 50%);
+}
+
+/* Dialogs/Modals */
+.dark [data-radix-dialog-content],
+.dark [data-radix-alert-dialog-content] {
+  background-color: hsl(222 47% 15%);
+  border-color: hsl(217 33% 25%);
+}
+
+/* Tabs */
+.dark [data-radix-tabs-list] {
+  background-color: hsl(222 47% 13%);
+}
+
+.dark [data-radix-tabs-trigger][data-state="active"] {
+  background-color: hsl(222 47% 18%);
+}
+
+/* Select content */
+.dark [data-radix-select-content] {
+  background-color: hsl(222 47% 15%);
+  border-color: hsl(217 33% 25%);
+}
+
+.dark [data-radix-select-item]:hover {
+  background-color: hsl(217 33% 20%);
+}
