@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthContext } from './AuthContext'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface RegisterFormProps {
   onToggleMode: () => void
@@ -10,6 +11,7 @@ interface RegisterFormProps {
 
 export function RegisterForm({ onToggleMode }: RegisterFormProps) {
   const { signUp, loading, error } = useAuthContext()
+  const { t } = useLanguage()
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,45 +23,45 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
     setLocalError('')
 
     if (!nombre || !email || !password || !confirmPassword) {
-      setLocalError('Por favor completa todos los campos')
+      setLocalError(t.validation.fillAllFields)
       return
     }
 
     if (password !== confirmPassword) {
-      setLocalError('Las contraseñas no coinciden')
+      setLocalError(t.validation.passwordMismatch)
       return
     }
 
     if (password.length < 6) {
-      setLocalError('La contraseña debe tener al menos 6 caracteres')
+      setLocalError(t.validation.passwordTooShort)
       return
     }
 
     try {
       await signUp(email, password, nombre)
     } catch {
-      setLocalError('Error al crear la cuenta')
+      setLocalError(t.validation.accountCreationError)
     }
   }
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
+        <CardTitle className="text-2xl">{t.auth.createAccount}</CardTitle>
         <CardDescription>
-          Regístrate para acceder a la aplicación
+          {t.app.tagline}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="nombre" className="text-sm font-medium">
-              Nombre
+              {t.auth.firstName}
             </label>
             <Input
               id="nombre"
               type="text"
-              placeholder="Tu nombre"
+              placeholder={t.personalData.firstNamePlaceholder}
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               disabled={loading}
@@ -67,12 +69,12 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
           </div>
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              {t.auth.email}
             </label>
             <Input
               id="email"
               type="email"
-              placeholder="tu@email.com"
+              placeholder={t.personalData.emailPlaceholder}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -80,7 +82,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium">
-              Contraseña
+              {t.auth.password}
             </label>
             <Input
               id="password"
@@ -93,7 +95,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
           </div>
           <div className="space-y-2">
             <label htmlFor="confirmPassword" className="text-sm font-medium">
-              Confirmar Contraseña
+              {t.auth.confirmPassword}
             </label>
             <Input
               id="confirmPassword"
@@ -110,17 +112,17 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Creando cuenta...' : 'Registrarse'}
+            {loading ? t.common.loading : t.auth.registerButton}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
-            ¿Ya tienes cuenta?{' '}
+            {t.auth.hasAccount}{' '}
             <button
               type="button"
               onClick={onToggleMode}
               className="text-primary hover:underline"
             >
-              Inicia sesión
+              {t.auth.login}
             </button>
           </p>
         </form>

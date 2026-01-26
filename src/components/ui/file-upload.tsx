@@ -4,6 +4,12 @@ import { Label } from './label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select'
 import { Input } from './input'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from './dialog'
+import {
   Upload,
   X,
   FileImage,
@@ -12,6 +18,10 @@ import {
   Loader2,
   Eye,
   Trash2,
+  Download,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ArchivoAdjunto, TipoArchivo } from '@/types'
@@ -51,6 +61,12 @@ export function FileUpload({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Estado para vista previa modal
+  const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [previewArchivo, setPreviewArchivo] = useState<ArchivoAdjunto | null>(null)
+  const [imageZoom, setImageZoom] = useState(1)
+  const [imageRotation, setImageRotation] = useState(0)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -204,6 +220,28 @@ export function FileUpload({
     return found?.label || tipo
   }
 
+  const openPreview = (archivo: ArchivoAdjunto) => {
+    setPreviewArchivo(archivo)
+    setImageZoom(1)
+    setImageRotation(0)
+    setPreviewModalOpen(true)
+  }
+
+  const handleZoomIn = () => {
+    setImageZoom(prev => Math.min(prev + 0.25, 3))
+  }
+
+  const handleZoomOut = () => {
+    setImageZoom(prev => Math.max(prev - 0.25, 0.5))
+  }
+
+  const handleRotate = () => {
+    setImageRotation(prev => (prev + 90) % 360)
+  }
+
+  const isImageFile = (mimeType: string) => ACCEPTED_IMAGE_TYPES.includes(mimeType)
+  const isPdfFile = (mimeType: string) => mimeType === 'application/pdf'
+
   return (
     <div className="space-y-4">
       {/* Drop zone */}
@@ -346,58 +384,83 @@ export function FileUpload({
           <Label className="text-sm font-medium">
             Archivos adjuntos ({archivos.length})
           </Label>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {archivos.map((archivo) => (
               <div
                 key={archivo.id}
-                className="flex items-center gap-3 p-3 bg-white border rounded-lg"
+                className="group relative bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg overflow-hidden hover:shadow-md transition-shadow"
               >
-                {/* Thumbnail */}
-                {ACCEPTED_IMAGE_TYPES.includes(archivo.mimeType) ? (
-                  <div className="w-12 h-12 rounded overflow-hidden bg-gray-100 shrink-0">
+                {/* Preview thumbnail - clickeable */}
+                <div
+                  onClick={() => openPreview(archivo)}
+                  className="cursor-pointer aspect-square bg-gray-100 dark:bg-slate-700 flex items-center justify-center relative overflow-hidden"
+                >
+                  {isImageFile(archivo.mimeType) ? (
                     <img
                       src={archivo.url}
                       alt={archivo.nombre}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
                     />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center shrink-0">
-                    {getTipoIcon(archivo.tipo)}
-                  </div>
-                )}
+                  ) : isPdfFile(archivo.mimeType) ? (
+                    <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                      <FileText className="h-12 w-12 mb-2" />
+                      <span className="text-xs font-medium">PDF</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                      {getTipoIcon(archivo.tipo)}
+                      <span className="text-xs mt-2">{archivo.mimeType.split('/')[1]?.toUpperCase()}</span>
+                    </div>
+                  )}
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {archivo.nombre}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="bg-gray-100 px-1.5 py-0.5 rounded">
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye className="h-8 w-8 text-white" />
+                  </div>
+
+                  {/* Tipo badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
                       {getTipoLabel(archivo.tipo)}
                     </span>
-                    <span>{formatFileSize(archivo.tamanio)}</span>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="p-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={archivo.nombre}>
+                    {archivo.nombre}
+                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatFileSize(archivo.tamanio)}
+                    </span>
                     {archivo.descripcion && (
-                      <span className="truncate">• {archivo.descripcion}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 truncate ml-2" title={archivo.descripcion}>
+                        {archivo.descripcion}
+                      </span>
                     )}
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1">
+                {/* Actions overlay */}
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <a
                     href={archivo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 hover:bg-gray-100 rounded transition-colors"
-                    title="Ver archivo"
+                    download={archivo.nombre}
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-1.5 bg-white/90 dark:bg-slate-800/90 rounded-full hover:bg-white dark:hover:bg-slate-700 transition-colors shadow-sm"
+                    title="Descargar"
                   >
-                    <Eye className="h-4 w-4 text-gray-500" />
+                    <Download className="h-4 w-4 text-gray-600 dark:text-gray-300" />
                   </a>
                   <button
                     type="button"
-                    onClick={() => handleRemove(archivo.id)}
-                    className="p-2 hover:bg-red-50 rounded transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRemove(archivo.id)
+                    }}
+                    className="p-1.5 bg-white/90 dark:bg-slate-800/90 rounded-full hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors shadow-sm"
                     title="Eliminar"
                   >
                     <Trash2 className="h-4 w-4 text-red-500" />
@@ -408,6 +471,109 @@ export function FileUpload({
           </div>
         </div>
       )}
+
+      {/* Preview Modal */}
+      <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 border-b dark:border-slate-700">
+            <DialogTitle className="flex items-center justify-between pr-8">
+              <span className="truncate">{previewArchivo?.nombre}</span>
+              <div className="flex items-center gap-2">
+                {previewArchivo && isImageFile(previewArchivo.mimeType) && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleZoomOut}
+                      disabled={imageZoom <= 0.5}
+                      title="Alejar"
+                    >
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground w-16 text-center">
+                      {Math.round(imageZoom * 100)}%
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleZoomIn}
+                      disabled={imageZoom >= 3}
+                      title="Acercar"
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleRotate}
+                      title="Rotar"
+                    >
+                      <RotateCw className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+                {previewArchivo && (
+                  <a
+                    href={previewArchivo.url}
+                    download={previewArchivo.nombre}
+                    className="inline-flex"
+                  >
+                    <Button variant="outline" size="icon" title="Descargar">
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </a>
+                )}
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto bg-gray-100 dark:bg-slate-900 p-4 flex items-center justify-center min-h-[400px]">
+            {previewArchivo && isImageFile(previewArchivo.mimeType) && (
+              <div className="overflow-auto max-w-full max-h-[calc(90vh-120px)]">
+                <img
+                  src={previewArchivo.url}
+                  alt={previewArchivo.nombre}
+                  className="max-w-none transition-transform duration-200"
+                  style={{
+                    transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                  }}
+                />
+              </div>
+            )}
+
+            {previewArchivo && isPdfFile(previewArchivo.mimeType) && (
+              <iframe
+                src={previewArchivo.url}
+                className="w-full h-[calc(90vh-120px)] border-0 rounded"
+                title={previewArchivo.nombre}
+              />
+            )}
+
+            {previewArchivo && !isImageFile(previewArchivo.mimeType) && !isPdfFile(previewArchivo.mimeType) && (
+              <div className="text-center py-12">
+                <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  Vista previa no disponible para este tipo de archivo
+                </p>
+                <a href={previewArchivo.url} download={previewArchivo.nombre}>
+                  <Button>
+                    <Download className="h-4 w-4 mr-2" />
+                    Descargar archivo
+                  </Button>
+                </a>
+              </div>
+            )}
+          </div>
+
+          {previewArchivo?.descripcion && (
+            <div className="p-3 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium">Descripción:</span> {previewArchivo.descripcion}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

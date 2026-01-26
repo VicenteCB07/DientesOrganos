@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthContext } from './AuthContext'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 interface LoginFormProps {
   onToggleMode: () => void
@@ -10,6 +11,7 @@ interface LoginFormProps {
 
 export function LoginForm({ onToggleMode }: LoginFormProps) {
   const { signIn, loading, error } = useAuthContext()
+  const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState('')
@@ -19,35 +21,35 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
     setLocalError('')
 
     if (!email || !password) {
-      setLocalError('Por favor completa todos los campos')
+      setLocalError(t.validation.fillAllFields)
       return
     }
 
     try {
       await signIn(email, password)
     } catch {
-      setLocalError('Credenciales inválidas')
+      setLocalError(t.validation.invalidCredentials)
     }
   }
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+        <CardTitle className="text-2xl">{t.auth.login}</CardTitle>
         <CardDescription>
-          Accede a tu cuenta para ver las relaciones dientes-órganos
+          {t.app.tagline}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">
-              Email
+              {t.auth.email}
             </label>
             <Input
               id="email"
               type="email"
-              placeholder="tu@email.com"
+              placeholder={t.personalData.emailPlaceholder}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
@@ -55,7 +57,7 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           </div>
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium">
-              Contraseña
+              {t.auth.password}
             </label>
             <Input
               id="password"
@@ -72,17 +74,17 @@ export function LoginForm({ onToggleMode }: LoginFormProps) {
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Cargando...' : 'Iniciar Sesión'}
+            {loading ? t.common.loading : t.auth.loginButton}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
-            ¿No tienes cuenta?{' '}
+            {t.auth.noAccount}{' '}
             <button
               type="button"
               onClick={onToggleMode}
               className="text-primary hover:underline"
             >
-              Regístrate
+              {t.auth.register}
             </button>
           </p>
         </form>

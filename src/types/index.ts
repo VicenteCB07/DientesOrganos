@@ -75,6 +75,7 @@ export interface DatosPersonales {
   email?: string
   direccion: string
   ciudad: string
+  pais?: string
   grupoSanguineo?: GrupoSanguineo
   documentoIdentidad: string
   fotoPerfil?: string // URL de la foto del paciente

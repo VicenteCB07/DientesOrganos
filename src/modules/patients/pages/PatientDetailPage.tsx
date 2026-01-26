@@ -13,11 +13,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { ArrowLeft, User, LogOut, Calendar, Phone, MapPin, FileText, Activity, AlertTriangle, Heart, Loader2, Search, X, Download, Pencil, Plus, History, Lock } from 'lucide-react'
-import type { DientePaciente, EstadoDiente, Odontograma } from '@/types'
+import { ArrowLeft, User, LogOut, Calendar, Phone, MapPin, FileText, Activity, AlertTriangle, Heart, Loader2, Search, X, Download, Pencil, Plus, History, Lock, FolderOpen } from 'lucide-react'
+import type { DientePaciente, EstadoDiente, Odontograma, ArchivoAdjunto } from '@/types'
 import { TEETH_DATA } from '@/modules/teeth/data/teethData'
 import { LanguageSelector } from '@/components/LanguageSelector'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { generatePatientReport } from '../services/pdfReportService'
 
 // Estados de diente disponibles - Lista completa sincronizada con EstadoDiente type
@@ -225,6 +226,7 @@ export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { usuario, signOut } = useAuthContext()
+  const { t } = useLanguage()
 
   const { data: paciente, isLoading: loadingPaciente } = usePatient(id)
   const { data: odontogramaActual, isLoading: loadingOdontograma } = useOdontograma(id)
@@ -279,6 +281,15 @@ export function PatientDetailPage() {
 
   // Ref para evitar crear odontograma múltiples veces
   const odontogramaCreated = useRef(false)
+  const previousPatientId = useRef<string | undefined>(undefined)
+
+  // Resetear ref cuando cambia el paciente
+  useEffect(() => {
+    if (id !== previousPatientId.current) {
+      odontogramaCreated.current = false
+      previousPatientId.current = id
+    }
+  }, [id])
 
   // Crear odontograma si no existe o si el actual está cerrado
   useEffect(() => {
@@ -310,6 +321,12 @@ export function PatientDetailPage() {
   // Ref para almacenar el ID del odontograma actual para el cierre
   const odontogramaIdRef = useRef<string | null>(null)
   const pacienteIdRef = useRef<string | undefined>(id)
+  const cerrarOdontogramaRef = useRef(cerrarOdontograma)
+
+  // Mantener actualizado el ref de la función de cierre
+  useEffect(() => {
+    cerrarOdontogramaRef.current = cerrarOdontograma
+  }, [cerrarOdontograma])
 
   // Mantener actualizado el ref del odontograma actual
   useEffect(() => {
@@ -319,18 +336,42 @@ export function PatientDetailPage() {
     pacienteIdRef.current = id
   }, [odontogramaActual?.id, odontogramaActual?.cerrado, id])
 
-  // Cerrar odontograma al salir de la página
+  // Función para cerrar el odontograma (usada en cleanup y beforeunload)
+  const cerrarOdontogramaActual = useRef(() => {
+    if (odontogramaIdRef.current && pacienteIdRef.current) {
+      cerrarOdontogramaRef.current.mutate({
+        odontogramaId: odontogramaIdRef.current,
+        pacienteId: pacienteIdRef.current,
+      })
+    }
+  })
+
+  // Actualizar la función de cierre cuando cambien las refs
   useEffect(() => {
-    return () => {
-      // Al desmontar, cerrar el odontograma si existe y no está cerrado
+    cerrarOdontogramaActual.current = () => {
       if (odontogramaIdRef.current && pacienteIdRef.current) {
-        cerrarOdontograma.mutate({
+        cerrarOdontogramaRef.current.mutate({
           odontogramaId: odontogramaIdRef.current,
           pacienteId: pacienteIdRef.current,
         })
       }
     }
-  }, []) // Solo se ejecuta al montar/desmontar
+  }, [])
+
+  // Cerrar odontograma al salir de la página o cerrar pestaña
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      cerrarOdontogramaActual.current()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Al desmontar, cerrar el odontograma si existe y no está cerrado
+      cerrarOdontogramaActual.current()
+    }
+  }, [])
 
   // Cargar condiciones desde anamnesis del paciente
   useEffect(() => {
@@ -477,7 +518,7 @@ export function PatientDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-          <p className="mt-2 text-gray-600">Cargando información del paciente...</p>
+          <p className="mt-2 text-gray-600">{t.patientDetail.loadingPatient}</p>
         </div>
       </div>
     )
@@ -488,10 +529,10 @@ export function PatientDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <Card className="p-8 text-center">
           <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900">Paciente no encontrado</h2>
-          <p className="text-gray-600 mt-2">El paciente que buscas no existe o fue eliminado.</p>
+          <h2 className="text-xl font-semibold text-gray-900">{t.patientDetail.patientNotFound}</h2>
+          <p className="text-gray-600 mt-2">{t.patientDetail.patientNotFound}</p>
           <Button className="mt-4" onClick={() => navigate('/patients')}>
-            Volver a Pacientes
+            {t.patientDetail.backToList}
           </Button>
         </Card>
       </div>
@@ -508,16 +549,16 @@ export function PatientDetailPage() {
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate('/patients')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
+              {t.common.back}
             </Button>
             <div className="border-l pl-4">
               <Link to="/teeth">
                 <h1 className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
-                  Dientes & Órganos
+                  {t.app.name}
                 </h1>
               </Link>
               <p className="text-sm text-muted-foreground">
-                Ficha del Paciente
+                {t.patients.viewRecord}
               </p>
             </div>
           </div>
@@ -529,7 +570,7 @@ export function PatientDetailPage() {
               onClick={() => navigate(`/patients/${id}/edit`)}
             >
               <Pencil className="h-4 w-4 mr-2" />
-              Editar Ficha
+              {t.common.edit}
             </Button>
             <Button
               variant="default"
@@ -538,7 +579,7 @@ export function PatientDetailPage() {
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Download className="h-4 w-4 mr-2" />
-              Exportar PDF
+              PDF
             </Button>
             <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
               <User className="h-4 w-4" />
@@ -548,7 +589,7 @@ export function PatientDetailPage() {
             <LanguageSelector />
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="h-4 w-4 mr-2" />
-              Salir
+              {t.auth.logout}
             </Button>
           </div>
         </div>
@@ -582,7 +623,7 @@ export function PatientDetailPage() {
                   <h2 className="text-2xl font-bold text-gray-900">
                     {formatearNombreCompleto(paciente)}
                   </h2>
-                  <p className="text-gray-600">{edad} años</p>
+                  <p className="text-gray-600">{edad} {t.patientDetail.years}</p>
                   <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
                     <FileText className="h-4 w-4" />
                     <span>{paciente.anamnesis.datosPersonales.documentoIdentidad}</span>
@@ -622,15 +663,19 @@ export function PatientDetailPage() {
           <TabsList className="bg-white border shadow-sm">
             <TabsTrigger value="anamnesis" className="gap-2">
               <FileText className="h-4 w-4" />
-              Anamnesis
+              {t.tabs.anamnesis}
             </TabsTrigger>
             <TabsTrigger value="condiciones" className="gap-2">
               <Heart className="h-4 w-4" />
-              Condiciones Generales
+              {t.tabs.generalConditions}
             </TabsTrigger>
             <TabsTrigger value="odontograma" className="gap-2">
               <Activity className="h-4 w-4" />
-              Odontograma
+              {t.tabs.odontogram}
+            </TabsTrigger>
+            <TabsTrigger value="documentos" className="gap-2">
+              <FolderOpen className="h-4 w-4" />
+              {t.documents.title}
             </TabsTrigger>
           </TabsList>
 
@@ -1300,6 +1345,24 @@ export function PatientDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Tab Documentos */}
+          <TabsContent value="documentos">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  {t.documents.title}
+                </CardTitle>
+                <CardDescription>
+                  {t.dentalHistory.attachedFilesDesc}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentosSection archivos={paciente.anamnesis.antecedentesOdontologicos.archivosAdjuntos || []} t={t} />
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
 
@@ -1565,6 +1628,99 @@ export function PatientDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Componente para mostrar los documentos del paciente (solo lista, sin vista previa)
+function DocumentosSection({ archivos, t }: { archivos: ArchivoAdjunto[]; t: ReturnType<typeof useLanguage>['t'] }) {
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const getTipoLabel = (tipo: ArchivoAdjunto['tipo']) => {
+    return t.documents.types[tipo] || tipo
+  }
+
+  const isPdf = (mimeType: string) => mimeType === 'application/pdf'
+
+  if (!archivos || archivos.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <FolderOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          {t.documents.noDocuments}
+        </h3>
+        <p className="text-muted-foreground">
+          {t.documents.noDocumentsHint}
+        </p>
+      </div>
+    )
+  }
+
+  // Agrupar archivos por tipo
+  const archivosPorTipo = archivos.reduce((acc, archivo) => {
+    if (!acc[archivo.tipo]) acc[archivo.tipo] = []
+    acc[archivo.tipo].push(archivo)
+    return acc
+  }, {} as Record<string, ArchivoAdjunto[]>)
+
+  return (
+    <div className="space-y-6">
+      {/* Resumen */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <span>{archivos.length} archivo(s) adjunto(s)</span>
+      </div>
+
+      {/* Archivos agrupados por tipo */}
+      {Object.entries(archivosPorTipo).map(([tipo, archivosDelTipo]) => (
+        <div key={tipo}>
+          <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <Badge variant="outline">{getTipoLabel(tipo as ArchivoAdjunto['tipo'])}</Badge>
+            <span className="text-sm text-muted-foreground">({archivosDelTipo.length})</span>
+          </h4>
+          <div className="space-y-2">
+            {archivosDelTipo.map((archivo) => (
+              <div
+                key={archivo.id}
+                className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Icono según tipo */}
+                  <div className="shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-slate-600 flex items-center justify-center">
+                    {isPdf(archivo.mimeType) ? (
+                      <FileText className="h-5 w-5 text-red-500" />
+                    ) : (
+                      <FileText className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                  {/* Info */}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {archivo.nombre}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(archivo.tamanio)}
+                      {archivo.descripcion && ` • ${archivo.descripcion}`}
+                    </p>
+                  </div>
+                </div>
+                {/* Botón descargar */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(archivo.url, '_blank')}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {t.documents.open}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

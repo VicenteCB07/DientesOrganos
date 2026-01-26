@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthContext } from '@/modules/auth'
 import { usePatients, useSearchPatients, useDeletePatient } from '../hooks/usePatients'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext'
 export function PatientsListPage() {
   const { usuario, signOut } = useAuthContext()
   const { t } = useLanguage()
+  const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [patientToDelete, setPatientToDelete] = useState<{ id: string; nombre: string } | null>(null)
@@ -143,24 +144,25 @@ export function PatientsListPage() {
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
         ) : displayPatients && displayPatients.length > 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="divide-y">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border dark:border-slate-700 overflow-hidden">
+            <div className="divide-y dark:divide-slate-700">
               {displayPatients.map((patient) => (
                 <div
                   key={patient.id}
-                  className="p-4 hover:bg-gray-50 transition-colors"
+                  onClick={() => navigate(`/patients/${patient.id}`)}
+                  className="p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <span className="text-blue-600 font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
+                          <span className="text-blue-600 dark:text-blue-300 font-semibold">
                             {patient.anamnesis.datosPersonales.nombre[0]}
                             {patient.anamnesis.datosPersonales.apellido[0]}
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate">
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
                             {patient.anamnesis.datosPersonales.nombre}{' '}
                             {patient.anamnesis.datosPersonales.apellido}
                           </h3>
@@ -185,22 +187,18 @@ export function PatientsListPage() {
                     <div className="flex items-center gap-2 ml-4">
                       <Button
                         variant="ghost"
-                        size="sm"
-                        onClick={() =>
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
                           handleDeleteClick(
                             patient.id,
                             `${patient.anamnesis.datosPersonales.nombre} ${patient.anamnesis.datosPersonales.apellido}`
                           )
-                        }
+                        }}
                       >
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
-                      <Link to={`/patients/${patient.id}`}>
-                        <Button variant="outline" size="sm">
-                          {t.patients.viewRecord}
-                          <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                      </Link>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
 

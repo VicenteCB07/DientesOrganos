@@ -404,7 +404,15 @@ function sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Timestamp)) {
       result[key] = sanitizeObject(value as Record<string, unknown>)
     } else if (Array.isArray(value)) {
-      result[key] = value.filter((v) => v !== undefined)
+      // Filtrar undefined y sanitizar objetos dentro del array
+      result[key] = value
+        .filter((v) => v !== undefined)
+        .map((v) => {
+          if (v !== null && typeof v === 'object' && !(v instanceof Timestamp)) {
+            return sanitizeObject(v as Record<string, unknown>)
+          }
+          return v
+        })
     } else {
       result[key] = value
     }
