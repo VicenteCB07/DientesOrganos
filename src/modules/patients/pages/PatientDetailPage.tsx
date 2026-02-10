@@ -299,6 +299,7 @@ export function PatientDetailPage() {
   const [editingDescripcion, setEditingDescripcion] = useState('') // Diagnóstico del diente
   const [editingHallazgos, setEditingHallazgos] = useState('') // Hallazgos clínicos
   const [estadoSearchTerm, setEstadoSearchTerm] = useState('') // Buscador de estados
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
 
   // Observaciones generales del odontograma
   const [observacionesGeneralesOdontograma, setObservacionesGeneralesOdontograma] = useState('')
@@ -608,11 +609,23 @@ export function PatientDetailPage() {
             <Button
               variant="default"
               size="sm"
-              onClick={() => generatePatientReport(paciente, odontograma)}
+              disabled={isGeneratingPdf}
+              onClick={async () => {
+                setIsGeneratingPdf(true)
+                try {
+                  await generatePatientReport(paciente, odontograma)
+                } finally {
+                  setIsGeneratingPdf(false)
+                }
+              }}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <Download className="h-4 w-4 mr-2" />
-              PDF
+              {isGeneratingPdf ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              {isGeneratingPdf ? 'Generando...' : 'PDF'}
             </Button>
             <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
               <User className="h-4 w-4" />
@@ -1441,54 +1454,88 @@ export function PatientDetailPage() {
               </div>
             )}
 
-            {/* Estado del diente con buscador */}
+            {/* Estado del diente con combobox */}
             <div className="space-y-2">
               <Label>Estado del diente</Label>
-              {/* Buscador de estados */}
+              {/* Estado actual seleccionado */}
+              {(() => {
+                const estadoActual = ESTADOS_DIENTE.find(e => e.value === editingState)
+                return estadoActual ? (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-slate-50 dark:bg-slate-800 border text-sm">
+                    <div className={`w-3 h-3 rounded-full ${estadoActual.color}`} />
+                    <span className="font-medium">{estadoActual.label}</span>
+                    <span className="text-xs text-muted-foreground">({estadoActual.categoria})</span>
+                  </div>
+                ) : null
+              })()}
+              {/* Buscador integrado con dropdown */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                 <Input
                   value={estadoSearchTerm}
                   onChange={(e) => setEstadoSearchTerm(e.target.value)}
-                  placeholder="Buscar estado..."
+                  placeholder="Escriba para buscar estado..."
                   className="pl-9 pr-8"
                 />
                 {estadoSearchTerm && (
                   <button
                     type="button"
                     onClick={() => setEstadoSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground z-10"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
-              <Select value={editingState} onValueChange={(v) => setEditingState(v as EstadoDiente)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {ESTADOS_DIENTE
-                    .filter((estado) => matchesSearch(estado, estadoSearchTerm))
-                    .map((estado) => (
-                      <SelectItem key={estado.value} value={estado.value}>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${estado.color}`} />
+              {/* Resultados filtrados como lista clicable */}
+              <div className="max-h-48 overflow-y-auto border rounded-md bg-white dark:bg-slate-900">
+                {(() => {
+                  const filtered = ESTADOS_DIENTE.filter((estado) => matchesSearch(estado, estadoSearchTerm))
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="px-3 py-4 text-sm text-center text-muted-foreground">
+                        No se encontraron estados
+                      </div>
+                    )
+                  }
+
+                  // Agrupar por categoría
+                  const porCategoria = filtered.reduce((acc, estado) => {
+                    if (!acc[estado.categoria]) acc[estado.categoria] = []
+                    acc[estado.categoria].push(estado)
+                    return acc
+                  }, {} as Record<string, typeof ESTADOS_DIENTE>)
+
+                  return Object.entries(porCategoria).map(([categoria, estados]) => (
+                    <div key={categoria}>
+                      <div className="sticky top-0 px-3 py-1.5 text-xs font-semibold text-muted-foreground bg-slate-50 dark:bg-slate-800 border-b">
+                        {categoria}
+                      </div>
+                      {estados.map((estado) => (
+                        <button
+                          key={estado.value}
+                          type="button"
+                          onClick={() => {
+                            setEditingState(estado.value as EstadoDiente)
+                            setEstadoSearchTerm('')
+                          }}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors
+                            ${editingState === estado.value
+                              ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                        >
+                          <div className={`w-3 h-3 rounded-full shrink-0 ${estado.color}`} />
                           <span>{estado.label}</span>
-                          <span className="text-xs text-muted-foreground">({estado.categoria})</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  {ESTADOS_DIENTE.filter((estado) => matchesSearch(estado, estadoSearchTerm)).length === 0 && (
-                    <div className="px-2 py-4 text-sm text-center text-muted-foreground">
-                      No se encontraron estados
+                        </button>
+                      ))}
                     </div>
-                  )}
-                </SelectContent>
-              </Select>
+                  ))
+                })()}
+              </div>
               {estadoSearchTerm && (
                 <p className="text-xs text-muted-foreground">
-                  {ESTADOS_DIENTE.filter((estado) => matchesSearch(estado, estadoSearchTerm)).length} resultados encontrados
+                  {ESTADOS_DIENTE.filter((estado) => matchesSearch(estado, estadoSearchTerm)).length} resultados
                 </p>
               )}
             </div>

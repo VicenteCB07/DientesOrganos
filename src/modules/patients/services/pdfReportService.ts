@@ -58,10 +58,40 @@ function getEstadoInfo(estado: string): { label: string; color: [number, number,
   return ESTADOS_DIENTE_MAP[estado] || { label: estado, color: [156, 163, 175] }
 }
 
-export function generatePatientReport(
+// Tipos de imagen soportados por jsPDF
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+/**
+ * Convierte una URL de imagen a base64 data URL para incrustar en el PDF
+ */
+async function imageUrlToBase64(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const blob = await response.blob()
+
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string
+        // Obtener dimensiones reales de la imagen
+        const img = new Image()
+        img.onload = () => resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
+        img.onerror = () => resolve({ dataUrl, width: 800, height: 600 }) // fallback
+        img.src = dataUrl
+      }
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function generatePatientReport(
   paciente: Paciente,
   odontograma: Odontograma | null | undefined
-): void {
+): Promise<void> {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -575,6 +605,210 @@ export function generatePatientReport(
   }
 
   y = drawInterferenceFields(y)
+
+  // ============================================
+  // ARCHIVOS ADJUNTOS
+  // ============================================
+  const drawAttachedFiles = (startY: number): number => {
+    let currentY = startY
+
+    const archivos = paciente.anamnesis?.antecedentesOdontologicos?.archivosAdjuntos
+    if (!archivos || archivos.length === 0) return currentY
+
+    // Verificar si necesitamos nueva página
+    if (currentY > pageHeight - 60) {
+      doc.addPage()
+      currentY = margin
+    }
+
+    // Título de sección
+    doc.setFillColor(...COLORS.background)
+    doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'F')
+    doc.setTextColor(...COLORS.primary)
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('ARCHIVOS ADJUNTOS', margin + 4, currentY + 7)
+    currentY += 15
+
+    // Resumen
+    doc.setTextColor(...COLORS.text)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`${archivos.length} archivo(s) adjunto(s)`, margin, currentY)
+    currentY += 7
+
+    // Labels de tipos
+    const tipoLabels: Record<string, string> = {
+      radiografia: 'Radiografía',
+      foto_intraoral: 'Foto Intraoral',
+      foto_extraoral: 'Foto Extraoral',
+      documento: 'Documento',
+      otro: 'Otro',
+    }
+
+    const formatFileSize = (bytes: number): string => {
+      if (bytes < 1024) return `${bytes} B`
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    }
+
+    // Tabla de archivos
+    const tableData = archivos.map(archivo => [
+      archivo.nombre,
+      tipoLabels[archivo.tipo] || archivo.tipo,
+      formatFileSize(archivo.tamanio),
+      archivo.descripcion || '-',
+      archivo.fechaSubida ? new Date(archivo.fechaSubida).toLocaleDateString('es-ES') : '-',
+    ])
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Nombre del archivo', 'Tipo', 'Tamaño', 'Descripción', 'Fecha']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: COLORS.primary,
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold',
+      },
+      bodyStyles: {
+        fontSize: 7,
+        textColor: COLORS.text,
+      },
+      columnStyles: {
+        0: { cellWidth: 55 },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 50 },
+        4: { cellWidth: 22 },
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      margin: { left: margin, right: margin },
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currentY = (doc as any).lastAutoTable.finalY + 5
+
+    // Nota
+    doc.setTextColor(...COLORS.textLight)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'italic')
+    doc.text('Los archivos digitales están disponibles en el sistema para visualización y descarga.', margin, currentY)
+    currentY += 8
+
+    return currentY
+  }
+
+  y = drawAttachedFiles(y)
+
+  // ============================================
+  // IMÁGENES ADJUNTAS (2 por página)
+  // ============================================
+  const drawAttachedImages = async (startY: number): Promise<number> => {
+    let currentY = startY
+
+    const archivos = paciente.anamnesis?.antecedentesOdontologicos?.archivosAdjuntos
+    if (!archivos || archivos.length === 0) return currentY
+
+    // Filtrar solo imágenes
+    const imagenes = archivos.filter(a => IMAGE_MIME_TYPES.includes(a.mimeType))
+    if (imagenes.length === 0) return currentY
+
+    // Labels de tipos
+    const tipoLabels: Record<string, string> = {
+      radiografia: 'Radiografía',
+      foto_intraoral: 'Foto Intraoral',
+      foto_extraoral: 'Foto Extraoral',
+      documento: 'Documento',
+      otro: 'Otro',
+    }
+
+    // Área disponible para cada imagen (2 por página)
+    const imgAreaWidth = contentWidth
+    const imgAreaHeight = (pageHeight - margin * 2 - 30) / 2 // 30 para título + margen entre imágenes
+    const labelHeight = 12 // Espacio para label debajo de la imagen
+
+    let imageIndex = 0
+
+    for (const imagen of imagenes) {
+      // Cada 2 imágenes o primera imagen: nueva página
+      if (imageIndex % 2 === 0) {
+        doc.addPage()
+        currentY = margin
+
+        // Título de sección
+        doc.setFillColor(...COLORS.background)
+        doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'F')
+        doc.setTextColor(...COLORS.primary)
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`ARCHIVOS ADJUNTOS - IMÁGENES (${imageIndex + 1}${Math.min(imageIndex + 2, imagenes.length) > imageIndex + 1 ? `-${Math.min(imageIndex + 2, imagenes.length)}` : ''} de ${imagenes.length})`, margin + 4, currentY + 7)
+        currentY += 14
+      }
+
+      // Cargar imagen
+      const imgData = await imageUrlToBase64(imagen.url)
+
+      if (imgData) {
+        // Calcular dimensiones manteniendo proporción
+        const maxW = imgAreaWidth
+        const maxH = imgAreaHeight - labelHeight - 4
+        const ratio = Math.min(maxW / imgData.width, maxH / imgData.height)
+        const drawW = imgData.width * ratio
+        const drawH = imgData.height * ratio
+
+        // Centrar horizontalmente
+        const imgX = margin + (imgAreaWidth - drawW) / 2
+
+        // Borde de la imagen
+        doc.setDrawColor(...COLORS.border)
+        doc.setLineWidth(0.3)
+        doc.roundedRect(imgX - 1, currentY - 1, drawW + 2, drawH + 2, 1, 1, 'S')
+
+        // Dibujar imagen
+        const format = imagen.mimeType === 'image/png' ? 'PNG' : 'JPEG'
+        doc.addImage(imgData.dataUrl, format, imgX, currentY, drawW, drawH)
+
+        currentY += drawH + 3
+
+        // Label: nombre + tipo
+        doc.setTextColor(...COLORS.text)
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'bold')
+        const label = `${tipoLabels[imagen.tipo] || imagen.tipo}: ${imagen.nombre}`
+        doc.text(label, margin, currentY + 3)
+
+        if (imagen.descripcion) {
+          doc.setFont('helvetica', 'normal')
+          doc.setTextColor(...COLORS.textLight)
+          doc.setFontSize(7)
+          doc.text(imagen.descripcion, margin, currentY + 8)
+          currentY += 12
+        } else {
+          currentY += 8
+        }
+      } else {
+        // No se pudo cargar la imagen, mostrar placeholder
+        doc.setFillColor(248, 250, 252)
+        doc.roundedRect(margin, currentY, imgAreaWidth, 20, 2, 2, 'F')
+        doc.setTextColor(...COLORS.textLight)
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'italic')
+        doc.text(`[No se pudo cargar: ${imagen.nombre}]`, margin + 4, currentY + 12)
+        currentY += 25
+      }
+
+      currentY += 4 // Espacio entre imágenes
+      imageIndex++
+    }
+
+    return currentY
+  }
+
+  y = await drawAttachedImages(y)
 
   // ============================================
   // FOOTER EN CADA PÁGINA
