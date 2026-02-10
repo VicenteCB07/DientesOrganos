@@ -51,7 +51,7 @@ export function FileUpload({
   onArchivosChange,
   onUpload,
   disabled = false,
-  maxFiles = 10,
+  maxFiles = 50,
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -94,6 +94,20 @@ export function FileUpload({
     return null
   }
 
+  const autoDetectTipo = (file: File): TipoArchivo => {
+    const name = file.name.toLowerCase()
+    if (name.includes('rx') || name.includes('radio') || name.includes('panoram')) {
+      return 'radiografia'
+    }
+    if (file.type === 'application/pdf' || file.type.includes('word')) {
+      return 'documento'
+    }
+    if (ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      return 'foto_intraoral'
+    }
+    return 'otro'
+  }
+
   const handleFileSelect = (file: File) => {
     setError(null)
     const validationError = validateFile(file)
@@ -112,13 +126,81 @@ export function FileUpload({
       setPreviewUrl(null)
     }
 
-    // Auto-detect tipo based on filename or mime type
-    if (file.name.toLowerCase().includes('rx') || file.name.toLowerCase().includes('radio')) {
-      setTipoArchivo('radiografia')
-    } else if (file.type === 'application/pdf' || file.type.includes('word')) {
-      setTipoArchivo('documento')
-    } else if (ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setTipoArchivo('foto_intraoral')
+    setTipoArchivo(autoDetectTipo(file))
+  }
+
+  // Agregar múltiples archivos en batch (sin pasar por formulario individual)
+  const handleBatchAdd = async (files: File[]) => {
+    setError(null)
+    const availableSlots = maxFiles - archivos.length
+    if (availableSlots <= 0) {
+      setError(`Máximo ${maxFiles} archivos permitidos.`)
+      return
+    }
+
+    const filesToProcess = files.slice(0, availableSlots)
+    if (files.length > availableSlots) {
+      setError(`Solo se agregaron ${availableSlots} de ${files.length} archivos (límite: ${maxFiles}).`)
+    }
+
+    // Validar todos los archivos
+    const validFiles: File[] = []
+    const errors: string[] = []
+    for (const file of filesToProcess) {
+      const acceptedTypes = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_DOCUMENT_TYPES]
+      if (!acceptedTypes.includes(file.type)) {
+        errors.push(`"${file.name}": tipo no permitido`)
+        continue
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`"${file.name}": excede 10MB`)
+        continue
+      }
+      validFiles.push(file)
+    }
+
+    if (errors.length > 0) {
+      setError(`Archivos omitidos: ${errors.join(', ')}`)
+    }
+
+    if (validFiles.length === 0) return
+
+    // Subir a cloud si está habilitado
+    if (onUpload) {
+      setIsUploading(true)
+      const nuevosArchivos: ArchivoAdjunto[] = []
+      try {
+        for (const file of validFiles) {
+          const tipo = autoDetectTipo(file)
+          const nuevoArchivo = await onUpload(file, tipo)
+          nuevosArchivos.push(nuevoArchivo)
+        }
+        onArchivosChange([...archivos, ...nuevosArchivos])
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Error al subir archivos')
+        // Agregar los que sí se subieron
+        if (nuevosArchivos.length > 0) {
+          onArchivosChange([...archivos, ...nuevosArchivos])
+        }
+      } finally {
+        setIsUploading(false)
+      }
+    } else {
+      // Local: crear objetos sin subir
+      const nuevosArchivos: ArchivoAdjunto[] = validFiles.map((file, i) => ({
+        id: `local-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`,
+        nombre: file.name,
+        tipo: autoDetectTipo(file),
+        url: URL.createObjectURL(file),
+        tamanio: file.size,
+        mimeType: file.type,
+        fechaSubida: new Date().toISOString(),
+      }))
+      onArchivosChange([...archivos, ...nuevosArchivos])
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
   }
 
@@ -128,15 +210,23 @@ export function FileUpload({
     if (disabled) return
 
     const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) {
+    if (files.length === 0) return
+
+    if (files.length === 1) {
       handleFileSelect(files[0])
+    } else {
+      handleBatchAdd(files)
     }
-  }, [disabled, archivos.length, maxFiles])
+  }, [disabled, archivos.length, maxFiles, archivos, onUpload])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (files && files.length > 0) {
+    if (!files || files.length === 0) return
+
+    if (files.length === 1) {
       handleFileSelect(files[0])
+    } else {
+      handleBatchAdd(Array.from(files))
     }
   }
 
@@ -265,14 +355,20 @@ export function FileUpload({
             onChange={handleInputChange}
             className="hidden"
             disabled={disabled}
+            multiple
           />
           <Upload className="h-10 w-10 text-gray-400 mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-700">
             Arrastra archivos aquí o haz clic para seleccionar
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            Imágenes (JPG, PNG, WebP) o documentos (PDF, DOC) • Máx. 10MB
+            Puedes seleccionar varios archivos a la vez • Imágenes (JPG, PNG, WebP) o documentos (PDF, DOC) • Máx. 10MB c/u
           </p>
+          {archivos.length > 0 && (
+            <p className="text-xs text-gray-400 mt-1">
+              {archivos.length} de {maxFiles} archivos
+            </p>
+          )}
         </div>
       )}
 

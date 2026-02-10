@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Tooth } from './Tooth'
 import { ToothDetail } from './ToothDetail'
 import { TEETH_DATA, CUADRANTES_INFO, ELEMENTOS_INFO } from '../data/teethData'
@@ -6,6 +6,7 @@ import type { ToothData } from '../types'
 
 export function ToothChart() {
   const [selectedTooth, setSelectedTooth] = useState<ToothData | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
 
   // Separar dientes por cuadrante
   const upperRight = TEETH_DATA.filter((t) => t.cuadrante === 1).sort((a, b) => a.numero - b.numero)
@@ -14,7 +15,17 @@ export function ToothChart() {
   const lowerRight = TEETH_DATA.filter((t) => t.cuadrante === 4).sort((a, b) => b.numero - a.numero)
 
   const handleToothClick = (tooth: ToothData) => {
-    setSelectedTooth(tooth.id === selectedTooth?.id ? null : tooth)
+    const isDeselecting = tooth.id === selectedTooth?.id
+    setSelectedTooth(isDeselecting ? null : tooth)
+
+    if (!isDeselecting) {
+      // Esperar al siguiente frame de pintado para garantizar que ToothDetail ya está en el DOM
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 50)
+      })
+    }
   }
 
   return (
@@ -159,10 +170,12 @@ export function ToothChart() {
 
       {/* Detalle del diente seleccionado */}
       {selectedTooth && (
-        <ToothDetail
-          tooth={selectedTooth}
-          onClose={() => setSelectedTooth(null)}
-        />
+        <div ref={detailRef} className="scroll-mt-4">
+          <ToothDetail
+            tooth={selectedTooth}
+            onClose={() => setSelectedTooth(null)}
+          />
+        </div>
       )}
 
       {/* Mensaje cuando no hay diente seleccionado */}

@@ -61,10 +61,10 @@ export function useAuth() {
     }
   }, [])
 
-  const signUp = useCallback(async (email: string, password: string, nombre: string) => {
+  const signUp = useCallback(async (email: string, password: string, nombre: string, apellido: string) => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
-      await authService.signUp(email, password, nombre)
+      await authService.signUp(email, password, nombre, apellido)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al registrarse'
       setState((prev) => ({ ...prev, loading: false, error: message }))

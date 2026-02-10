@@ -13,6 +13,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
   const { signUp, loading, error } = useAuthContext()
   const { t } = useLanguage()
   const [nombre, setNombre] = useState('')
+  const [apellido, setApellido] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -22,7 +23,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
     e.preventDefault()
     setLocalError('')
 
-    if (!nombre || !email || !password || !confirmPassword) {
+    if (!nombre || !apellido || !email || !password || !confirmPassword) {
       setLocalError(t.validation.fillAllFields)
       return
     }
@@ -38,7 +39,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
     }
 
     try {
-      await signUp(email, password, nombre)
+      await signUp(email, password, nombre, apellido)
     } catch {
       setLocalError(t.validation.accountCreationError)
     }
@@ -54,18 +55,33 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="nombre" className="text-sm font-medium">
-              {t.auth.firstName}
-            </label>
-            <Input
-              id="nombre"
-              type="text"
-              placeholder={t.personalData.firstNamePlaceholder}
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              disabled={loading}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="nombre" className="text-sm font-medium">
+                {t.auth.firstName}
+              </label>
+              <Input
+                id="nombre"
+                type="text"
+                placeholder={t.auth.firstNamePlaceholder}
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="apellido" className="text-sm font-medium">
+                {t.auth.lastName}
+              </label>
+              <Input
+                id="apellido"
+                type="text"
+                placeholder={t.auth.lastNamePlaceholder || 'Tu apellido'}
+                value={apellido}
+                onChange={(e) => setApellido(e.target.value)}
+                disabled={loading}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium">

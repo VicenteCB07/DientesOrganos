@@ -591,7 +591,7 @@ export function AntecedentesOdontologicosForm({
         archivos={archivosAdjuntos}
         onArchivosChange={handleArchivosChange}
         onUpload={enableCloudUpload ? handleCloudUpload : undefined}
-        maxFiles={10}
+        maxFiles={50}
       />
     </div>
   )

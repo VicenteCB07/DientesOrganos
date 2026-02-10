@@ -10,7 +10,7 @@ interface AuthContextType {
   error: string | null
   isAuthenticated: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, nombre: string) => Promise<void>
+  signUp: (email: string, password: string, nombre: string, apellido: string) => Promise<void>
   signOut: () => Promise<void>
 }
 

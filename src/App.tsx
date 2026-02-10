@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuthContext, AuthPage } from '@/modules/auth'
 import { TeethChartPage } from '@/modules/teeth'
 import { PatientsListPage, NewPatientPage, PatientDetailPage, EditPatientPage } from '@/modules/patients'
+import { UsersListPage } from '@/modules/users'
 import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { ThemeProvider } from '@/lib/theme/ThemeContext'
 
@@ -109,6 +110,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <EditPatientPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <UsersListPage />
           </ProtectedRoute>
         }
       />

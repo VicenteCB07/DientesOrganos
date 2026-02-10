@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ToothChart } from '../components/ToothChart'
 import { useAuthContext } from '@/modules/auth'
 import { Button } from '@/components/ui/button'
-import { LogOut, User, Users, ChevronDown, ChevronRight, Stethoscope, ClipboardList, Home, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { LogOut, User, Users, ChevronDown, ChevronRight, Stethoscope, ClipboardList, Home, PanelLeftClose, PanelLeft, ShieldCheck } from 'lucide-react'
 import { LanguageSelector } from '@/components/LanguageSelector'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
@@ -135,6 +135,21 @@ export function TeethChartPage() {
                 </div>
               )}
             </div>
+
+            {/* Administración - Solo para admins */}
+            {(usuario?.rol === 'super_admin' || usuario?.rol === 'admin') && (
+              <Link
+                to="/users"
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white transition-colors",
+                  isSidebarCollapsed && "justify-center"
+                )}
+                title={isSidebarCollapsed ? "Administrar Usuarios" : undefined}
+              >
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                {!isSidebarCollapsed && <span>Administrar Usuarios</span>}
+              </Link>
+            )}
           </nav>
 
           {/* Info del usuario en la parte inferior */}

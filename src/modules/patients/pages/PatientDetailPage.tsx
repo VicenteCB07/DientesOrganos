@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuthContext } from '@/modules/auth'
-import { usePatient, useOdontograma, useOdontogramasHistorial, useCreateOdontograma, useUpdateTooth, useUpdateOdontogramaObservaciones, useCerrarOdontograma } from '../hooks/usePatients'
+import { usePatient, useUpdatePatient, useOdontograma, useOdontogramasHistorial, useCreateOdontograma, useUpdateTooth, useUpdateOdontogramaObservaciones, useCerrarOdontograma } from '../hooks/usePatients'
 import { formatearNombreCompleto, calcularEdad } from '../services/patientsService'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -13,13 +13,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { ArrowLeft, User, LogOut, Calendar, Phone, MapPin, FileText, Activity, AlertTriangle, Heart, Loader2, Search, X, Download, Pencil, Plus, History, Lock, FolderOpen } from 'lucide-react'
+import { ArrowLeft, User, LogOut, Calendar, Phone, MapPin, FileText, Activity, AlertTriangle, Heart, Loader2, Search, X, Download, Pencil, Plus, History, Lock, FolderOpen, Trash2 } from 'lucide-react'
 import type { DientePaciente, EstadoDiente, Odontograma, ArchivoAdjunto } from '@/types'
 import { TEETH_DATA } from '@/modules/teeth/data/teethData'
 import { LanguageSelector } from '@/components/LanguageSelector'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { generatePatientReport } from '../services/pdfReportService'
+import { deleteFile } from '@/lib/firebase/storage'
 
 // Estados de diente disponibles - Lista completa sincronizada con EstadoDiente type
 const ESTADOS_DIENTE_RAW: { value: EstadoDiente; label: string; color: string; categoria: string }[] = [
@@ -235,6 +236,38 @@ export function PatientDetailPage() {
   const updateTooth = useUpdateTooth()
   const updateObservaciones = useUpdateOdontogramaObservaciones()
   const cerrarOdontograma = useCerrarOdontograma()
+  const updatePatient = useUpdatePatient()
+
+  // Eliminar archivo del paciente
+  const handleDeleteArchivo = async (archivoId: string, archivoUrl: string) => {
+    if (!paciente || !id) return
+
+    const archivosActuales = paciente.anamnesis?.antecedentesOdontologicos?.archivosAdjuntos || []
+    const archivosActualizados = archivosActuales.filter(a => a.id !== archivoId)
+
+    try {
+      // Eliminar de Storage si es una URL de Firebase (no local)
+      if (archivoUrl.includes('firebasestorage') || archivoUrl.includes('googleapis')) {
+        await deleteFile(archivoUrl)
+      }
+
+      // Actualizar el paciente en Firestore
+      await updatePatient.mutateAsync({
+        id,
+        data: {
+          anamnesis: {
+            ...paciente.anamnesis,
+            antecedentesOdontologicos: {
+              ...paciente.anamnesis.antecedentesOdontologicos,
+              archivosAdjuntos: archivosActualizados,
+            },
+          },
+        } as never,
+      })
+    } catch (error) {
+      console.error('Error al eliminar archivo:', error)
+    }
+  }
 
   // Estado para seleccionar qué odontograma ver del historial
   const [selectedOdontogramaId, setSelectedOdontogramaId] = useState<string | null>(null)
@@ -1359,7 +1392,11 @@ export function PatientDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <DocumentosSection archivos={paciente.anamnesis.antecedentesOdontologicos.archivosAdjuntos || []} t={t} />
+                <DocumentosSection
+                  archivos={paciente.anamnesis.antecedentesOdontologicos.archivosAdjuntos || []}
+                  t={t}
+                  onDelete={handleDeleteArchivo}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -1633,7 +1670,18 @@ export function PatientDetailPage() {
 }
 
 // Componente para mostrar los documentos del paciente (solo lista, sin vista previa)
-function DocumentosSection({ archivos, t }: { archivos: ArchivoAdjunto[]; t: ReturnType<typeof useLanguage>['t'] }) {
+function DocumentosSection({
+  archivos,
+  t,
+  onDelete,
+}: {
+  archivos: ArchivoAdjunto[]
+  t: ReturnType<typeof useLanguage>['t']
+  onDelete?: (archivoId: string, archivoUrl: string) => Promise<void>
+}) {
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -1645,6 +1693,17 @@ function DocumentosSection({ archivos, t }: { archivos: ArchivoAdjunto[]; t: Ret
   }
 
   const isPdf = (mimeType: string) => mimeType === 'application/pdf'
+
+  const handleDelete = async (archivo: ArchivoAdjunto) => {
+    if (!onDelete) return
+    setDeletingId(archivo.id)
+    try {
+      await onDelete(archivo.id, archivo.url)
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
+  }
 
   if (!archivos || archivos.length === 0) {
     return (
@@ -1707,15 +1766,57 @@ function DocumentosSection({ archivos, t }: { archivos: ArchivoAdjunto[]; t: Ret
                     </p>
                   </div>
                 </div>
-                {/* Botón descargar */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(archivo.url, '_blank')}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {t.documents.open}
-                </Button>
+                {/* Acciones */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Confirmación de eliminación inline */}
+                  {confirmDeleteId === archivo.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-600 dark:text-red-400">Eliminar?</span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(archivo)}
+                        disabled={deletingId === archivo.id}
+                      >
+                        {deletingId === archivo.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          'Sí'
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmDeleteId(null)}
+                        disabled={deletingId === archivo.id}
+                      >
+                        No
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {onDelete && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                          onClick={() => setConfirmDeleteId(archivo.id)}
+                          title="Eliminar archivo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(archivo.url, '_blank')}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        {t.documents.open}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
