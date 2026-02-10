@@ -172,9 +172,10 @@ interface AnamnesisWizardProps {
   onCancel?: () => void
   isLoading?: boolean
   initialData?: Partial<Anamnesis>
+  pacienteId?: string
 }
 
-export function AnamnesisWizard({ onSubmit, onCancel, isLoading, initialData }: AnamnesisWizardProps) {
+export function AnamnesisWizard({ onSubmit, onCancel, isLoading, initialData, pacienteId }: AnamnesisWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
 
   const methods = useForm<Anamnesis>({
@@ -250,7 +251,7 @@ export function AnamnesisWizard({ onSubmit, onCancel, isLoading, initialData }: 
       case 2:
         return <AntecedentesMedicosForm />
       case 3:
-        return <AntecedentesOdontologicosForm />
+        return <AntecedentesOdontologicosForm pacienteId={pacienteId} enableCloudUpload />
       case 4:
         return <HabitosEstiloVidaForm />
       case 5:

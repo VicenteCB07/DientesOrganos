@@ -115,6 +115,7 @@ export function EditPatientPage() {
           onCancel={handleCancel}
           isLoading={updatePatient.isPending}
           initialData={paciente.anamnesis}
+          pacienteId={id}
         />
       </main>
     </div>

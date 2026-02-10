@@ -709,8 +709,9 @@ export function generatePatientReport(
       otro: 'Otro',
     }
 
-    // Tabla de archivos
-    const tableData = archivos.map(archivo => [
+    // Tabla de archivos con referencia a URLs
+    const tableData = archivos.map((archivo, i) => [
+      `${i + 1}`,
       archivo.nombre,
       tipoLabels[archivo.tipo] || archivo.tipo,
       archivo.descripcion || '-',
@@ -719,7 +720,7 @@ export function generatePatientReport(
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Nombre del archivo', 'Tipo', 'Descripción', 'Fecha']],
+      head: [['#', 'Nombre del archivo', 'Tipo', 'Descripción', 'Fecha']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -733,10 +734,11 @@ export function generatePatientReport(
         textColor: COLORS.text,
       },
       columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 55 },
-        3: { cellWidth: 25 },
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 52 },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 52 },
+        4: { cellWidth: 22 },
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252],
