@@ -709,29 +709,17 @@ export function generatePatientReport(
       otro: 'Otro',
     }
 
-    const formatFileSize = (bytes: number): string => {
-      if (bytes < 1024) return `${bytes} B`
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    }
-
-    // Tabla de archivos con enlace
-    const fileUrls: string[] = []
-    const tableData = archivos.map(archivo => {
-      fileUrls.push(archivo.url)
-      return [
-        archivo.nombre,
-        tipoLabels[archivo.tipo] || archivo.tipo,
-        formatFileSize(archivo.tamanio),
-        archivo.descripcion || '-',
-        archivo.fechaSubida ? new Date(archivo.fechaSubida).toLocaleDateString('es-ES') : '-',
-        '', // Celda vacía — el texto "Abrir" se dibuja manualmente con link
-      ]
-    })
+    // Tabla de archivos
+    const tableData = archivos.map(archivo => [
+      archivo.nombre,
+      tipoLabels[archivo.tipo] || archivo.tipo,
+      archivo.descripcion || '-',
+      archivo.fechaSubida ? new Date(archivo.fechaSubida).toLocaleDateString('es-ES') : '-',
+    ])
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Nombre del archivo', 'Tipo', 'Tamaño', 'Descripción', 'Fecha', 'Enlace']],
+      head: [['Nombre del archivo', 'Tipo', 'Descripción', 'Fecha']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -745,44 +733,51 @@ export function generatePatientReport(
         textColor: COLORS.text,
       },
       columnStyles: {
-        0: { cellWidth: 45 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 16 },
-        3: { cellWidth: 42 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 18, halign: 'center' },
+        0: { cellWidth: 55 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 55 },
+        3: { cellWidth: 25 },
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252],
       },
       margin: { left: margin, right: margin },
-      didDrawCell: (data) => {
-        // Dibujar texto "Abrir" en azul con hipervínculo externo clickeable
-        if (data.section === 'body' && data.column.index === 5) {
-          const fileUrl = fileUrls[data.row.index]
-          if (fileUrl) {
-            const textX = data.cell.x + 3
-            const textY = data.cell.y + data.cell.height / 2 + 1
-            doc.setTextColor(...COLORS.primary)
-            doc.setFontSize(7)
-            doc.setFont('helvetica', 'bold')
-            // textWithLink dibuja texto + crea área clickeable con URL externa
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(doc as any).textWithLink('Abrir archivo', textX, textY, { url: fileUrl })
-          }
-        }
-      },
     })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     currentY = (doc as any).lastAutoTable.finalY + 5
 
-    // Nota
+    // URLs de acceso directo (texto copiable)
     doc.setTextColor(...COLORS.textLight)
     doc.setFontSize(7)
     doc.setFont('helvetica', 'italic')
-    doc.text('Los archivos digitales están disponibles en el sistema para visualización y descarga.', margin, currentY)
-    currentY += 8
+    doc.text('Enlaces de acceso directo (copiar y pegar en el navegador):', margin, currentY)
+    currentY += 5
+
+    archivos.forEach((archivo, index) => {
+      // Verificar espacio en página
+      if (currentY > pageHeight - 25) {
+        doc.addPage()
+        currentY = margin
+      }
+
+      // Nombre del archivo
+      doc.setTextColor(...COLORS.text)
+      doc.setFontSize(6.5)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`${index + 1}. ${archivo.nombre}`, margin, currentY)
+      currentY += 3.5
+
+      // URL completa en azul (texto seleccionable/copiable)
+      doc.setTextColor(...COLORS.primary)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(5.5)
+      const urlLines = doc.splitTextToSize(archivo.url, contentWidth - 5)
+      doc.text(urlLines, margin + 3, currentY)
+      currentY += urlLines.length * 2.5 + 2
+    })
+
+    currentY += 3
 
     return currentY
   }
