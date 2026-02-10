@@ -1,7 +1,5 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { ref, getBlob } from 'firebase/storage'
-import { storage } from '@/lib/firebase/config'
 import type { Paciente, Odontograma, DientePaciente } from '@/types'
 import { TEETH_DATA } from '@/modules/teeth/data/teethData'
 import { formatearNombreCompleto, calcularEdad } from './patientsService'
@@ -60,78 +58,11 @@ function getEstadoInfo(estado: string): { label: string; color: [number, number,
   return ESTADOS_DIENTE_MAP[estado] || { label: estado, color: [156, 163, 175] }
 }
 
-// Tipos de imagen soportados por jsPDF
-const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
-/**
- * Extrae la ruta de Storage de una URL de descarga de Firebase Storage.
- * Soporta ambos formatos:
- * - firebasestorage.app: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/ENCODED_PATH?...
- * - firebasestorage.app nuevo: https://BUCKET.firebasestorage.app/v0/b/BUCKET/o/ENCODED_PATH?...
- */
-function extractStoragePath(url: string): string | null {
-  try {
-    // Formato: .../o/ENCODED_PATH?alt=media&token=...
-    const match = url.match(/\/o\/([^?]+)/)
-    if (match) {
-      return decodeURIComponent(match[1])
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Convierte un Blob a base64 dataURL y obtiene las dimensiones de la imagen.
- */
-function blobToImageData(blob: Blob): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string
-      const img = new window.Image()
-      img.onload = () => resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
-      img.onerror = () => resolve({ dataUrl, width: 800, height: 600 })
-      img.src = dataUrl
-    }
-    reader.onerror = () => resolve(null)
-    reader.readAsDataURL(blob)
-  })
-}
-
-/**
- * Descarga una imagen de Firebase Storage usando el SDK (evita CORS completamente).
- * Si la URL no es de Firebase Storage, hace fallback a fetch directo.
- */
-async function imageUrlToBase64(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  // 1. Intentar con Firebase SDK (sin problemas de CORS)
-  const storagePath = extractStoragePath(url)
-  if (storagePath) {
-    try {
-      const storageRef = ref(storage, storagePath)
-      const blob = await getBlob(storageRef)
-      return await blobToImageData(blob)
-    } catch (error) {
-      console.warn('Firebase getBlob falló, intentando fetch directo:', error)
-    }
-  }
-
-  // 2. Fallback: fetch directo (para URLs que no son de Firebase Storage)
-  try {
-    const response = await fetch(url)
-    if (!response.ok) return null
-    const blob = await response.blob()
-    return await blobToImageData(blob)
-  } catch {
-    return null
-  }
-}
-
-export async function generatePatientReport(
+export function generatePatientReport(
   paciente: Paciente,
   odontograma: Odontograma | null | undefined
-): Promise<void> {
+): void {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -647,6 +578,98 @@ export async function generatePatientReport(
   y = drawInterferenceFields(y)
 
   // ============================================
+  // RELACIÓN DIENTE-ÓRGANO (MTC)
+  // ============================================
+  const drawToothOrganTable = (startY: number): number => {
+    let currentY = startY
+
+    if (!odontograma) return currentY
+
+    // Filtrar dientes con alguna condición (no sanos)
+    const dientesAfectados = odontograma.dientes.filter(
+      d => d.estado !== 'sano'
+    )
+
+    if (dientesAfectados.length === 0) return currentY
+
+    // Verificar si necesitamos nueva página
+    if (currentY > pageHeight - 60) {
+      doc.addPage()
+      currentY = margin
+    }
+
+    // Título de sección
+    doc.setFillColor(...COLORS.background)
+    doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'F')
+    doc.setTextColor(...COLORS.primary)
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('RELACIÓN DIENTE-ÓRGANO (MEDICINA TRADICIONAL CHINA)', margin + 4, currentY + 7)
+    currentY += 15
+
+    const tableData = dientesAfectados.map(diente => {
+      const toothInfo = TEETH_DATA.find(t => t.numero === diente.numeroDiente)
+      const estadoInfo = getEstadoInfo(diente.estado)
+
+      return [
+        `#${diente.numeroDiente}`,
+        toothInfo?.nombreCorto || '-',
+        estadoInfo.label,
+        toothInfo?.elemento || '-',
+        toothInfo?.organos.join(', ') || '-',
+        toothInfo?.emocion || '-',
+        toothInfo?.meridianos.join(', ') || '-',
+      ]
+    })
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Diente', 'Nombre', 'Estado', 'Elemento', 'Órganos', 'Emoción', 'Meridianos']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: {
+        fillColor: COLORS.primary,
+        textColor: [255, 255, 255],
+        fontSize: 7,
+        fontStyle: 'bold',
+      },
+      bodyStyles: {
+        fontSize: 6.5,
+        textColor: COLORS.text,
+      },
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 16 },
+        4: { cellWidth: 38 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 30 },
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252],
+      },
+      margin: { left: margin, right: margin },
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    currentY = (doc as any).lastAutoTable.finalY + 5
+
+    // Nota explicativa
+    doc.setTextColor(...COLORS.textLight)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'italic')
+    const nota = 'Relaciones basadas en la Medicina Tradicional China (MTC) y la Odontología Neurofocal. Cada diente se asocia a meridianos energéticos, órganos y emociones específicas.'
+    const notaLines = doc.splitTextToSize(nota, contentWidth)
+    doc.text(notaLines, margin, currentY)
+    currentY += notaLines.length * 3 + 5
+
+    return currentY
+  }
+
+  y = drawToothOrganTable(y)
+
+  // ============================================
   // ARCHIVOS ADJUNTOS
   // ============================================
   const drawAttachedFiles = (startY: number): number => {
@@ -692,18 +715,23 @@ export async function generatePatientReport(
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     }
 
-    // Tabla de archivos
-    const tableData = archivos.map(archivo => [
-      archivo.nombre,
-      tipoLabels[archivo.tipo] || archivo.tipo,
-      formatFileSize(archivo.tamanio),
-      archivo.descripcion || '-',
-      archivo.fechaSubida ? new Date(archivo.fechaSubida).toLocaleDateString('es-ES') : '-',
-    ])
+    // Tabla de archivos con enlace
+    const fileUrls: string[] = []
+    const tableData = archivos.map(archivo => {
+      fileUrls.push(archivo.url)
+      return [
+        archivo.nombre,
+        tipoLabels[archivo.tipo] || archivo.tipo,
+        formatFileSize(archivo.tamanio),
+        archivo.descripcion || '-',
+        archivo.fechaSubida ? new Date(archivo.fechaSubida).toLocaleDateString('es-ES') : '-',
+        '', // Celda vacía — el texto "Abrir" se dibuja manualmente con link
+      ]
+    })
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Nombre del archivo', 'Tipo', 'Tamaño', 'Descripción', 'Fecha']],
+      head: [['Nombre del archivo', 'Tipo', 'Tamaño', 'Descripción', 'Fecha', 'Enlace']],
       body: tableData,
       theme: 'striped',
       headStyles: {
@@ -717,16 +745,31 @@ export async function generatePatientReport(
         textColor: COLORS.text,
       },
       columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 18 },
-        3: { cellWidth: 50 },
-        4: { cellWidth: 22 },
+        0: { cellWidth: 45 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 16 },
+        3: { cellWidth: 42 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 18, halign: 'center' },
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252],
       },
       margin: { left: margin, right: margin },
+      didDrawCell: (data) => {
+        // Dibujar texto "Abrir" en azul con hipervínculo clickeable
+        if (data.section === 'body' && data.column.index === 5) {
+          const url = fileUrls[data.row.index]
+          if (url) {
+            const textX = data.cell.x + data.cell.width / 2
+            const textY = data.cell.y + data.cell.height / 2 + 1
+            doc.setTextColor(...COLORS.primary)
+            doc.setFontSize(7)
+            doc.setFont('helvetica', 'normal')
+            doc.textWithLink('Abrir', textX, textY, { url, align: 'center' } as never)
+          }
+        }
+      },
     })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -743,112 +786,6 @@ export async function generatePatientReport(
   }
 
   y = drawAttachedFiles(y)
-
-  // ============================================
-  // IMÁGENES ADJUNTAS (2 por página)
-  // ============================================
-  const drawAttachedImages = async (startY: number): Promise<number> => {
-    let currentY = startY
-
-    const archivos = paciente.anamnesis?.antecedentesOdontologicos?.archivosAdjuntos
-    if (!archivos || archivos.length === 0) return currentY
-
-    // Filtrar solo imágenes
-    const imagenes = archivos.filter(a => IMAGE_MIME_TYPES.includes(a.mimeType))
-    if (imagenes.length === 0) return currentY
-
-    // Labels de tipos
-    const tipoLabels: Record<string, string> = {
-      radiografia: 'Radiografía',
-      foto_intraoral: 'Foto Intraoral',
-      foto_extraoral: 'Foto Extraoral',
-      documento: 'Documento',
-      otro: 'Otro',
-    }
-
-    // Área disponible para cada imagen (2 por página)
-    const imgAreaWidth = contentWidth
-    const imgAreaHeight = (pageHeight - margin * 2 - 30) / 2 // 30 para título + margen entre imágenes
-    const labelHeight = 12 // Espacio para label debajo de la imagen
-
-    let imageIndex = 0
-
-    for (const imagen of imagenes) {
-      // Cada 2 imágenes o primera imagen: nueva página
-      if (imageIndex % 2 === 0) {
-        doc.addPage()
-        currentY = margin
-
-        // Título de sección
-        doc.setFillColor(...COLORS.background)
-        doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'F')
-        doc.setTextColor(...COLORS.primary)
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bold')
-        doc.text(`ARCHIVOS ADJUNTOS - IMÁGENES (${imageIndex + 1}${Math.min(imageIndex + 2, imagenes.length) > imageIndex + 1 ? `-${Math.min(imageIndex + 2, imagenes.length)}` : ''} de ${imagenes.length})`, margin + 4, currentY + 7)
-        currentY += 14
-      }
-
-      // Cargar imagen
-      const imgData = await imageUrlToBase64(imagen.url)
-
-      if (imgData) {
-        // Calcular dimensiones manteniendo proporción
-        const maxW = imgAreaWidth
-        const maxH = imgAreaHeight - labelHeight - 4
-        const ratio = Math.min(maxW / imgData.width, maxH / imgData.height)
-        const drawW = imgData.width * ratio
-        const drawH = imgData.height * ratio
-
-        // Centrar horizontalmente
-        const imgX = margin + (imgAreaWidth - drawW) / 2
-
-        // Borde de la imagen
-        doc.setDrawColor(...COLORS.border)
-        doc.setLineWidth(0.3)
-        doc.roundedRect(imgX - 1, currentY - 1, drawW + 2, drawH + 2, 1, 1, 'S')
-
-        // Dibujar imagen (detectar formato del dataUrl)
-        const format = imgData.dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG'
-        doc.addImage(imgData.dataUrl, format, imgX, currentY, drawW, drawH)
-
-        currentY += drawH + 3
-
-        // Label: nombre + tipo
-        doc.setTextColor(...COLORS.text)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        const label = `${tipoLabels[imagen.tipo] || imagen.tipo}: ${imagen.nombre}`
-        doc.text(label, margin, currentY + 3)
-
-        if (imagen.descripcion) {
-          doc.setFont('helvetica', 'normal')
-          doc.setTextColor(...COLORS.textLight)
-          doc.setFontSize(7)
-          doc.text(imagen.descripcion, margin, currentY + 8)
-          currentY += 12
-        } else {
-          currentY += 8
-        }
-      } else {
-        // No se pudo cargar la imagen, mostrar placeholder
-        doc.setFillColor(248, 250, 252)
-        doc.roundedRect(margin, currentY, imgAreaWidth, 20, 2, 2, 'F')
-        doc.setTextColor(...COLORS.textLight)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'italic')
-        doc.text(`[No se pudo cargar: ${imagen.nombre}]`, margin + 4, currentY + 12)
-        currentY += 25
-      }
-
-      currentY += 4 // Espacio entre imágenes
-      imageIndex++
-    }
-
-    return currentY
-  }
-
-  y = await drawAttachedImages(y)
 
   // ============================================
   // FOOTER EN CADA PÁGINA
