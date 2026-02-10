@@ -759,18 +759,16 @@ export function generatePatientReport(
       didDrawCell: (data) => {
         // Dibujar texto "Abrir" en azul con hipervínculo externo clickeable
         if (data.section === 'body' && data.column.index === 5) {
-          const url = fileUrls[data.row.index]
-          if (url) {
-            // Dibujar texto centrado en la celda
-            const textX = data.cell.x + data.cell.width / 2
+          const fileUrl = fileUrls[data.row.index]
+          if (fileUrl) {
+            const textX = data.cell.x + 3
             const textY = data.cell.y + data.cell.height / 2 + 1
             doc.setTextColor(...COLORS.primary)
             doc.setFontSize(7)
             doc.setFont('helvetica', 'bold')
-            doc.text('Abrir', textX, textY, { align: 'center' })
-
-            // Crear área clickeable con URL externa sobre toda la celda
-            doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url })
+            // textWithLink dibuja texto + crea área clickeable con URL externa
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(doc as any).textWithLink('Abrir archivo', textX, textY, { url: fileUrl })
           }
         }
       },
