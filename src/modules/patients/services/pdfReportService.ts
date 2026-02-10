@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { ref, getBlob } from 'firebase/storage'
+import { storage } from '@/lib/firebase/config'
 import type { Paciente, Odontograma, DientePaciente } from '@/types'
 import { TEETH_DATA } from '@/modules/teeth/data/teethData'
 import { formatearNombreCompleto, calcularEdad } from './patientsService'
@@ -62,27 +64,65 @@ function getEstadoInfo(estado: string): { label: string; color: [number, number,
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 /**
- * Convierte una URL de imagen a base64 data URL para incrustar en el PDF
+ * Extrae la ruta de Storage de una URL de descarga de Firebase Storage.
+ * Soporta ambos formatos:
+ * - firebasestorage.app: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/ENCODED_PATH?...
+ * - firebasestorage.app nuevo: https://BUCKET.firebasestorage.app/v0/b/BUCKET/o/ENCODED_PATH?...
+ */
+function extractStoragePath(url: string): string | null {
+  try {
+    // Formato: .../o/ENCODED_PATH?alt=media&token=...
+    const match = url.match(/\/o\/([^?]+)/)
+    if (match) {
+      return decodeURIComponent(match[1])
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Convierte un Blob a base64 dataURL y obtiene las dimensiones de la imagen.
+ */
+function blobToImageData(blob: Blob): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string
+      const img = new window.Image()
+      img.onload = () => resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
+      img.onerror = () => resolve({ dataUrl, width: 800, height: 600 })
+      img.src = dataUrl
+    }
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Descarga una imagen de Firebase Storage usando el SDK (evita CORS completamente).
+ * Si la URL no es de Firebase Storage, hace fallback a fetch directo.
  */
 async function imageUrlToBase64(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  // 1. Intentar con Firebase SDK (sin problemas de CORS)
+  const storagePath = extractStoragePath(url)
+  if (storagePath) {
+    try {
+      const storageRef = ref(storage, storagePath)
+      const blob = await getBlob(storageRef)
+      return await blobToImageData(blob)
+    } catch (error) {
+      console.warn('Firebase getBlob falló, intentando fetch directo:', error)
+    }
+  }
+
+  // 2. Fallback: fetch directo (para URLs que no son de Firebase Storage)
   try {
     const response = await fetch(url)
     if (!response.ok) return null
     const blob = await response.blob()
-
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string
-        // Obtener dimensiones reales de la imagen
-        const img = new Image()
-        img.onload = () => resolve({ dataUrl, width: img.naturalWidth, height: img.naturalHeight })
-        img.onerror = () => resolve({ dataUrl, width: 800, height: 600 }) // fallback
-        img.src = dataUrl
-      }
-      reader.onerror = () => resolve(null)
-      reader.readAsDataURL(blob)
-    })
+    return await blobToImageData(blob)
   } catch {
     return null
   }
@@ -768,8 +808,8 @@ export async function generatePatientReport(
         doc.setLineWidth(0.3)
         doc.roundedRect(imgX - 1, currentY - 1, drawW + 2, drawH + 2, 1, 1, 'S')
 
-        // Dibujar imagen
-        const format = imagen.mimeType === 'image/png' ? 'PNG' : 'JPEG'
+        // Dibujar imagen (detectar formato del dataUrl)
+        const format = imgData.dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG'
         doc.addImage(imgData.dataUrl, format, imgX, currentY, drawW, drawH)
 
         currentY += drawH + 3
